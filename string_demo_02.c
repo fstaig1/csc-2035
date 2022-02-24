@@ -14,6 +14,7 @@
 #define MAX_BUF_SIZE 24 
                 // size of string buffer, length will be MAX_BUF_SIZE - 1
 #define MAX_STR_LEN 128 // limit for string length searches
+#define _GNU_SOURCE
 
 /* 
  * The buf_arg_infstr function takes the following parameters:
@@ -44,7 +45,7 @@
  *
  * If arg1 is NULL, then the string "null" will be output for arg1_stem. 
  *
- * The function returns a pointer to the resulting formated string. This 
+ * The function returns a pointer to the resulting formatted string. This 
  * will be a pointer to the provided buffer if there are no errors and NULL
  * if any errors are detected.
  *
@@ -101,11 +102,11 @@ int main(int argc, char** argv) {
     } else {
         printf("buf_arg_infstr result is NULL\n");
     }
-        
+    free(new_str);
+    
     printf("\n-------------------------------\nusing arg_infstr:\n");
     char buf2[MAX_BUF_SIZE];
     char* buf2_str = arg_infstr(buf2, argc, argv[0], argv[1]);
-            // pass NULL instead of buf2 to dynamically allocate buf2_str
     if (buf2_str) {
         printf("buf2_str: %s\n", buf2_str);
         printf("strnlen(buf2_str, MAX_STR_LEN): %zu\n", 
@@ -114,6 +115,18 @@ int main(int argc, char** argv) {
         printf("arg_infstr result is NULL\n");
     }
     
+    // pass NULL as first parameter to dynamically allocate string
+    char* buf2_str_onheap = arg_infstr(NULL, argc, argv[0], argv[1]);
+    
+    if (buf2_str_onheap) {
+        printf("\nbuf2_str_onheap: %s\n", buf2_str_onheap);
+        printf("strnlen(buf2_str_onheap, MAX_STR_LEN): %zu\n", 
+                    strnlen(buf2_str_onheap, MAX_STR_LEN));
+        
+        free(buf2_str_onheap);
+    } else {
+        printf("arg_infstr result is NULL\n");
+    }
     
     return 0;
 }
@@ -140,19 +153,67 @@ int main(int argc, char** argv) {
  * - error handling is about checking parameters
  */
 char* buf_arg_infstr(char* buf, int argc, char* cmd, char* arg1) {
-    char* fmt = "%d:%d:%s:%d:%s";
-    if (!arg1) arg1 = "null";
-    int r = snprintf(buf, MAX_BUF_SIZE, fmt, argc, 
-                strnlen(cmd, MAX_STR_LEN), cmd, 
-                strnlen(arg1, MAX_STR_LEN), arg1);
+    char* fmt = "%02d:%02d:%.8s:%02d:%.5s";
     
-    return r < 0 ? NULL :  buf;
+    if (!buf)
+        return NULL;
+        
+    if (!arg1)
+        arg1 = "null";
+    
+    int r = snprintf(buf, MAX_BUF_SIZE, fmt, argc - 1, 
+                strnlen(cmd, MAX_STR_LEN), cmd, 
+                strnlen(arg1, MAX_STR_LEN), arg1);  
+                
+    return r < 0 ? NULL : buf;
 }
 
 char* new_arg_infstr(int argc, char* cmd, char* arg1) {
-    return NULL;
+    char* fmt = "%02d:%02d:%.8s:%02d:%.5s";
+    if (!arg1)
+        arg1 = "null";
+   
+    char* buf;
+    
+    int r = asprintf(&buf, fmt, argc - 1, 
+                strnlen(cmd, MAX_STR_LEN), cmd, 
+                strnlen(arg1, MAX_STR_LEN), arg1); 
+     
+    return buf;
+    
 }
 
 char* arg_infstr(char* buf, int argc, char* cmd, char* arg1) {
-    return NULL;
+    char* fmt = "%02d:%02d:%.8s:%02d:%.5s";
+    char* result_str;
+    
+    if (!arg1)
+        arg1 = "null";
+
+    if (buf) { 
+        int r = snprintf(buf, MAX_BUF_SIZE, fmt, argc - 1, 
+                    strnlen(cmd, MAX_STR_LEN), cmd, 
+                    strnlen(arg1, MAX_STR_LEN), arg1);
+                
+        result_str = r < 0 ? NULL : buf;
+    } else {
+        int r = asprintf(&result_str, fmt, argc - 1, 
+                    strnlen(cmd, MAX_STR_LEN), cmd, 
+                    strnlen(arg1, MAX_STR_LEN), arg1); 
+    }
+        
+    return result_str;
 }
+
+/* 
+ * Given we have defined buf_arg_infstr and new_arg_infstr, an alternative 
+ * would be to write arg_infstr in terms of the other two functions, as 
+ * follows. If we were writing, arg_infstr from scratch without the other two 
+ * functions it is simple enough to write as a single function and doesn't need
+ * helper functions.
+
+char* arg_infstr(char* buf, int argc, char* cmd, char* arg1) {
+    return buf ? buf_arg_infstr(buf, argc, cmd, arg1)
+                : new_arg_infstr(argc, cmd, arg1);
+}
+*/
